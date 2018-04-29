@@ -1,0 +1,12 @@
+
+
+WORK_DIR=.build
+OUT_DIR=.
+
+
+gen:
+	cd $(WORK_DIR) && ./gendata -o $(OUT_DIR)/data.txt -n 100000
+
+
+sort:
+	cd $(WORK_DIR) && ./ssort -i $(OUT_DIR)/data.txt -o $(OUT_DIR)/sorted_data.txt
