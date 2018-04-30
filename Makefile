@@ -10,7 +10,7 @@ SORT_NAME=ssort
 SORT_SRC=select_sort_omp.cpp
 
 CXX=g++
-CXX_FLAGS=-std=c++11 -fopenmp
+CXX_FLAGS=-std=c++11 -fopenmp -O2
 
 all: gen sort
 

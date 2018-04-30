@@ -14,37 +14,54 @@ using std::string;
 using std::cout;
 using std::endl;
 
-struct {
-    std::string in_file_name;
-    std::string out_file_name;
-    bool verbosity = false;
-} pr_opts;
+namespace prog {
 
+    struct OPTS {
+        std::string in_file_name;
+        std::string out_file_name;
+        bool verbosity = false;
+    } opts;
 
-void parse_args(int argc, char *argv[])
-{
-    int opt = 0;
+    struct LOG {
 
-    const char* opt_string = "i:o:v";
+        template<typename T>
+        LOG& operator<<(T&& value) {
+            if (opts.verbosity) cout << value;
+            return *this;
+        }
 
-    while( (opt = getopt( argc, argv, opt_string )) != -1 )
+        LOG& operator<<(std::ostream& (*os)(std::ostream&)) {
+            if (opts.verbosity) cout << endl;
+            return *this;
+        }
+
+    } log;
+
+    void parse_args(int argc, char *argv[])
     {
-        switch( opt )
+        int opt = 0;
+
+        const char* opt_string = "i:o:v";
+
+        while( (opt = getopt( argc, argv, opt_string )) != -1 )
         {
-            case 'o':
-                pr_opts.out_file_name = optarg;
-                break;
+            switch( opt )
+            {
+                case 'o':
+                    opts.out_file_name = optarg;
+                    break;
 
-            case 'i':
-                pr_opts.in_file_name = optarg;
-                break;
+                case 'i':
+                    opts.in_file_name = optarg;
+                    break;
 
-            case 'v':
-                pr_opts.verbosity = true;
-                break;
+                case 'v':
+                    opts.verbosity = true;
+                    break;
 
-            default:
-                break;
+                default:
+                    break;
+            }
         }
     }
 }
@@ -54,26 +71,32 @@ using Compare = struct { size_t idx; size_t val;  };
     omp_out = (omp_in.val < omp_out.val) ? omp_in : omp_out) \
     initializer(omp_priv = Compare{0, std::numeric_limits<size_t>::max()})
 
-void __selection_sort(vector<std::pair<size_t,string>>& data, size_t start, size_t end)
+void __selection_sort(vector<std::pair<size_t,string>>& data, vector<std::pair<size_t,string>>& outp, size_t start, size_t end)
 {
-    auto size = end+1;
-    for (size_t idx_curr = start; idx_curr < size - 1; idx_curr++)
+    for (size_t i = start; i <= end; i++)
     {
-        Compare min{idx_curr, data[idx_curr].first};
+        outp[i].first = data[i].first;
+        outp[i].second = data[i].second;
+    }
 
-        #pragma omp parallel for reduction(MIN: min)
-        for (size_t j = idx_curr+1; j < size; j++)
+    for (size_t idx_curr = start; idx_curr < end; idx_curr++)
+    {
+        Compare min{idx_curr, outp[idx_curr].first};
+
+        //#pragma omp parallel for reduction(MIN: min)
+        for (size_t j = idx_curr+1; j <= end; j++)
         {
-            if (data[j].first < min.val)
+            if (outp[j].first < min.val)
             {
                 min.idx = j;
-                min.val = data[j].first;
+                min.val = outp[j].first;
             }
         }
 
-        std::swap(data[idx_curr], data[min.idx]);
+        std::swap(outp[idx_curr], outp[min.idx]);
     }
 }
+
 
 void parallel_selection_sort(vector<std::pair<size_t,string>>& data, vector<std::pair<size_t,string>>& outp)
 {
@@ -82,6 +105,9 @@ void parallel_selection_sort(vector<std::pair<size_t,string>>& data, vector<std:
     size_t chunk = 0;
     size_t rest = 0;
 
+    vector<std::pair<size_t,string>> partial_sorted(data_size);
+
+    prog::log << "Sorting..." << endl;
     #pragma omp parallel
     {
         num_threads = omp_get_num_threads();
@@ -89,23 +115,23 @@ void parallel_selection_sort(vector<std::pair<size_t,string>>& data, vector<std:
         rest = data_size % num_threads;
         auto thread_num = omp_get_thread_num();
         auto start = chunk*thread_num;
-        auto end = (thread_num == num_threads-1) ? chunk*thread_num + chunk - 1 + rest : chunk*thread_num + chunk - 1;
-        __selection_sort(data, start, end);
+        auto end = start + (chunk-1) + (thread_num == num_threads-1 ? rest : 0);
+        __selection_sort(data, partial_sorted, start, end);
     };
+    prog::log << "done." << endl;
 
+    prog::log << "Merging..." << endl;
     vector<size_t> inds{};
     vector<size_t> ends{};
 
     for (auto thread_num = 0; thread_num < num_threads; thread_num++)
     {
         inds.push_back(chunk*thread_num);
-        ends.push_back((thread_num == num_threads-1) ? chunk*thread_num + chunk - 1 + rest : chunk*thread_num + chunk - 1);
+        ends.push_back(chunk*thread_num + (chunk-1) + (thread_num == num_threads-1 ? rest : 0));
     }
 
     while (true)
     {
-//        printf("%zu, %zu, %zu, %zu\n", inds[0],inds[1],inds[2], inds[3]);
-
         bool is_end = true;
         for (auto thread_num = 0; thread_num < num_threads; thread_num++)
         {
@@ -119,36 +145,35 @@ void parallel_selection_sort(vector<std::pair<size_t,string>>& data, vector<std:
             if (inds[thread_num] <= ends[thread_num])
             {
                 min.idx = static_cast<size_t>(thread_num);
-                min.val = data[inds[thread_num]].first;
+                min.val = partial_sorted[inds[thread_num]].first;
             }
         }
 
         for (size_t thread_num = 0; thread_num < num_threads; thread_num++)
         {
-            if (inds[thread_num] <= ends[thread_num] && data[inds[thread_num]].first < min.val)
+            if (inds[thread_num] <= ends[thread_num] && partial_sorted[inds[thread_num]].first < min.val)
             {
                 min.idx = thread_num;
-                min.val = data[inds[thread_num]].first;
+                min.val = partial_sorted[inds[thread_num]].first;
             }
         }
 
-        outp.push_back(std::move(data[inds[min.idx]]));
+        outp.push_back(std::move(partial_sorted[inds[min.idx]]));
         inds[min.idx]++;
     }
+    prog::log << "done." << endl;
 
 }
 
-
-
-inline void selection_sort(vector<std::pair<size_t,string>>& data)
+inline void selection_sort(vector<std::pair<size_t,string>>& data, vector<std::pair<size_t,string>>& outp)
 {
-    return __selection_sort(data, 0, data.size()-1);
+    return __selection_sort(data, outp, 0, data.size()-1);
 }
 
 
 void read_data(std::ifstream& in, vector<std::pair<size_t, string>>& data)
 {
-    cout << "Reading..." << endl;
+    prog::log << "Reading..." << endl;
     for (string line; std::getline(in, line);)
     {
         char trash;
@@ -164,22 +189,22 @@ void read_data(std::ifstream& in, vector<std::pair<size_t, string>>& data)
 
         data.emplace_back(key, value);
     }
-    cout << "done." << endl;
+    prog::log << "done." << endl;
 }
 
 void write_data(std::ofstream& out, vector<std::pair<size_t, string>>& data)
 {
-    cout << "Writing..." << endl;
+    prog::log << "Writing..." << endl;
     for (auto& p: data)
     {
         out << "%%%" << p.first << ";" << p.second << "$$$" << endl;
     }
-    cout << "done." << endl;
+    prog::log << "done." << endl;
 }
 
 int main(int argc, char* argv[])
 {
-    parse_args(argc, argv);
+    prog::parse_args(argc, argv);
 
     try
     {
@@ -187,23 +212,19 @@ int main(int argc, char* argv[])
         vector<std::pair<size_t, string>> data{};
         vector<std::pair<size_t, string>> sorted_data{};
 
-        std::ifstream in{pr_opts.in_file_name};
+        std::ifstream in{prog::opts.in_file_name};
         read_data(in, data);
 
-        cout << "Data size: " << data.size() << endl;
+        prog::log << "Data size: " << data.size() << endl;
 
-
-        cout << "Sorting..." << endl;
         parallel_selection_sort(data, sorted_data);
-        cout << "done." << endl;
 
-
-        std::ofstream out{pr_opts.out_file_name};
+        std::ofstream out{prog::opts.out_file_name};
         write_data(out, sorted_data);
     }
     catch (std::exception& e)
     {
-        std::cout << e.what() << std::endl;
+        std::cerr << e.what() << std::endl;
     }
 
     return 0;
