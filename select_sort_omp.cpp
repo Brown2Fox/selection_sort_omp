@@ -235,7 +235,7 @@ int main(int argc, char* argv[])
         #ifdef PARALLEL
             parallel_selection_sort(data, sorted_data);
         #else
-            prog::log << "sorting..." << endl;
+            prog::log << "Sorting..." << endl;
             selection_sort(data, sorted_data);
             prog::log << "done." << endl;
         #endif
