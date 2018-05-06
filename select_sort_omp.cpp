@@ -83,7 +83,9 @@ void __selection_sort(vector<std::pair<size_t,string>>& data, vector<std::pair<s
     {
         Compare min{idx_curr, outp[idx_curr].first};
 
-        //#pragma omp parallel for reduction(MIN: min)
+        #ifdef INNER_PARALLEL
+            #pragma omp parallel for reduction(MIN: min)
+        #endif
         for (size_t j = idx_curr+1; j <= end; j++)
         {
             if (outp[j].first < min.val)
@@ -99,7 +101,8 @@ void __selection_sort(vector<std::pair<size_t,string>>& data, vector<std::pair<s
 
 
 void parallel_selection_sort(vector<std::pair<size_t,string>>& data, vector<std::pair<size_t,string>>& outp)
-{
+{   
+    // in each threads values will be identical
     auto num_threads = 0;
     auto data_size = data.size();
     size_t chunk = 0;
@@ -167,7 +170,7 @@ void parallel_selection_sort(vector<std::pair<size_t,string>>& data, vector<std:
 
 inline void selection_sort(vector<std::pair<size_t,string>>& data, vector<std::pair<size_t,string>>& outp)
 {
-    return __selection_sort(data, outp, 0, data.size()-1);
+    return outp.resize(data.size()), __selection_sort(data, outp, 0, data.size()-1);
 }
 
 
@@ -206,9 +209,18 @@ int main(int argc, char* argv[])
 {
     prog::parse_args(argc, argv);
 
+    #ifdef PARALLEL
+        prog::log << "--- PARALLEL" << endl;
+    #else
+        prog::log << "--- NON-PARALLEL" << endl;
+    #endif
+
+    #ifdef INNER_PARALLEL
+        prog::log << "--- INNER_PARALLEL" << endl;
+    #endif
+
     try
     {
-
         vector<std::pair<size_t, string>> data{};
         vector<std::pair<size_t, string>> sorted_data{};
 
@@ -217,7 +229,13 @@ int main(int argc, char* argv[])
 
         prog::log << "Data size: " << data.size() << endl;
 
-        parallel_selection_sort(data, sorted_data);
+        #ifdef PARALLEL
+            parallel_selection_sort(data, sorted_data);
+        #else
+            prog::log << "sorting..." << endl;
+            selection_sort(data, sorted_data);
+            prog::log << "done." << endl;
+        #endif
 
         std::ofstream out{prog::opts.out_file_name};
         write_data(out, sorted_data);
