@@ -106,21 +106,21 @@ void parallel_selection_sort(vector<std::pair<size_t,string>>& data, vector<std:
     vector<std::pair<size_t,string>> partial_sorted(data_size);
 
     int num_threads = 0;
-    size_t chunk = 0;
-    size_t rest = 0;
+    size_t chunk_sz = 0;
+    size_t tail_sz = 0;
 
     prog::log << "Sorting..." << endl;
     #pragma omp parallel
     {
         // these values will be identical in each threads (probably)
         num_threads = omp_get_num_threads();
-        chunk = data_size / num_threads;
-        rest = data_size % num_threads;
+        chunk_sz = data_size / num_threads;
+        tail_sz = data_size % num_threads;
         // thread specific values
         auto thread_num = omp_get_thread_num();
-        auto start = chunk*thread_num;
-        auto is_rest = thread_num == num_threads-1;
-        auto end = start + (chunk-1) + (is_rest ? rest : 0);
+        auto start = chunk_sz*thread_num;
+        auto is_tail = thread_num == num_threads-1;
+        auto end = start + (chunk_sz-1) + (is_tail ? tail_sz : 0);
         // sorting
         __selection_sort(data, partial_sorted, start, end);
     };
@@ -132,8 +132,8 @@ void parallel_selection_sort(vector<std::pair<size_t,string>>& data, vector<std:
 
     for (auto thread_num = 0; thread_num < num_threads; thread_num++)
     {
-        inds.push_back(chunk*thread_num);
-        ends.push_back(chunk*thread_num + (chunk-1) + (thread_num == num_threads-1 ? rest : 0));
+        inds.push_back(chunk_sz*thread_num);
+        ends.push_back(chunk_sz*thread_num + (chunk_sz-1) + (thread_num == num_threads-1 ? tail_sz : 0));
     }
 
     while (true)
