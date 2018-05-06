@@ -119,7 +119,8 @@ void parallel_selection_sort(vector<std::pair<size_t,string>>& data, vector<std:
         // thread specific values
         auto thread_num = omp_get_thread_num();
         auto start = chunk*thread_num;
-        auto end = start + (chunk-1) + (thread_num == num_threads-1 ? rest : 0);
+        auto is_rest = thread_num == num_threads-1;
+        auto end = start + (chunk-1) + (is_rest ? rest : 0);
         // sorting
         __selection_sort(data, partial_sorted, start, end);
     };
