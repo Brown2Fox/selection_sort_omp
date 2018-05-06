@@ -102,23 +102,25 @@ void __selection_sort(vector<std::pair<size_t,string>>& data, vector<std::pair<s
 
 void parallel_selection_sort(vector<std::pair<size_t,string>>& data, vector<std::pair<size_t,string>>& outp)
 {   
-    // in each threads values will be identical
-    auto num_threads = 0;
     auto data_size = data.size();
+    vector<std::pair<size_t,string>> partial_sorted(data_size);
+
+    int num_threads = 0;
     size_t chunk = 0;
     size_t rest = 0;
-
-    vector<std::pair<size_t,string>> partial_sorted(data_size);
 
     prog::log << "Sorting..." << endl;
     #pragma omp parallel
     {
+        // these values will be identical in each threads (probably)
         num_threads = omp_get_num_threads();
         chunk = data_size / num_threads;
         rest = data_size % num_threads;
+        // thread specific values
         auto thread_num = omp_get_thread_num();
         auto start = chunk*thread_num;
         auto end = start + (chunk-1) + (thread_num == num_threads-1 ? rest : 0);
+        // sorting
         __selection_sort(data, partial_sorted, start, end);
     };
     prog::log << "done." << endl;
