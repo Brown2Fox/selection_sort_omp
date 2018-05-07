@@ -1,3 +1,28 @@
+# Description
+
+```
+Initial std::vector<Record> is broken up into subvectors of chunk size
+
+         +-------+-------+-     -+-------+
+Data --> ┆ chunk ┆ chunk ┆  ...  ┆ chunk ┆
+         +-------+-------+-     -+-------+
+                     |
+                     | <-- for each subvector of chunk size
+                     |
+                     |    #pragme omp parallel
+                     |    {
+                     └─>     selection_sort(chunk)
+                          }       |
+                                  |
+                                  |
+                                  |
+  #pragma opm parallel for  <─────┘
+  {
+      // finding minimum with reduction
+  }
+  
+```
+
 ## For build
 
 ```
