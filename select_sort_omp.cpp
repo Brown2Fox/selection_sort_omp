@@ -7,14 +7,16 @@
 #include <iostream>
 #include <unistd.h>
 #include <sstream>
+#include <ostream>
 #include <limits>
+#include <iterator>
 
 using std::vector;
 using std::string;
 using std::cout;
 using std::endl;
 
-namespace prog {
+namespace pr {
 
     struct OPTS {
         std::string in_file_name;
@@ -66,18 +68,160 @@ namespace prog {
     }
 }
 
-using Compare = struct { size_t idx; size_t val;  };
+class Record
+{
+    const size_t DATA_SIZE = 200;
+public:
+    Record() noexcept
+        : valid_{ false }
+        , first{ -1 }
+        , second{new char[DATA_SIZE]}
+    {
+        second[0] = '\0';
+    }
+
+    Record(const Record& other)
+        : valid_{other.valid_}
+        , first{other.first}
+        , second{new char[DATA_SIZE]}
+    {
+        std::copy(other.second, other.second + DATA_SIZE, second);
+    }
+
+    Record(Record&& other) noexcept
+            : valid_{other.valid_}
+            , first{other.first}
+            , second{other.second}
+    {
+        other.second = nullptr;
+    }
+
+    Record& operator=(Record&& other) noexcept
+    {
+        if (this != &other)
+        {
+            delete[] second;
+
+            valid_ = other.valid_;
+            first = other.first;
+            second = other.second;
+
+            other.second = nullptr;
+        }
+        return *this;
+    }
+
+    Record& operator=(const Record& other)
+    {
+        if (this != &other)
+        {
+            std::copy(other.second, other.second + DATA_SIZE, second);
+
+            valid_ = other.valid_;
+            first = other.first;
+        }
+        return *this;
+    }
+
+    ~Record()
+    {
+        delete [] second;
+    }
+
+    bool valid() const noexcept
+    {
+        return valid_;
+    }
+
+
+    friend std::ostream& operator<< ( std::ostream&, const Record& );
+    friend std::istream& operator>> ( std::istream&, Record& );
+
+    long long int first;
+    char* second;
+
+private:
+    bool valid_;
+};
+
+std::ostream& operator<< ( std::ostream& out, const Record& r )
+{
+    return out << "%%%" << r.first << r.second << "$$$";
+}
+
+std::istream& operator>> ( std::istream& in, Record& r )
+{
+    /* Read '%%%(\d+)(.*)$$$' */
+
+    int c = in.get();
+
+    /* Skip spaces */
+    while( isspace( c ) ) {
+        c = in.get();
+    }
+
+    /* Start marker '%%%' */
+    for( int i = 0; i < 3; ++i ) {
+        if( c != '%' ) {
+            return in;
+        }
+        c = in.get();
+    }
+
+    /* Key, positive integer <= INT_MAX */
+    if( !isdigit( c ) ) {
+        return in;
+    }
+
+    r.first = 0;
+    while( isdigit( c ) ) {
+        r.first = r.first * 10 + ( c - '0' );
+        c = in.get();
+    }
+
+    /* Value, may be empty, may contain '%%' and '$$' */
+    int s_count = 0;
+    int val_len = 0;
+    for( ;; ) {
+        if( c == '$' ) {
+            ++s_count;
+        } else if( s_count < 3 ) {
+            s_count = 0;
+        } else {
+            in.unget();
+            break;
+        }
+        r.second[val_len++] = static_cast<char>(c);
+        c = in.get();
+    }
+
+    /* Cut end marker '$$$' */
+    r.second[val_len - 3] = '\0';
+
+    r.valid_ = true;
+    return in;
+}
+
+namespace std
+{
+
+    void swap(Record& x, Record& y)
+    {
+        Record z = std::move(x);
+        x = std::move(y);
+        y = std::move(z);
+    };
+
+}
+
+using Compare = struct { size_t idx; long long int val;  };
 #pragma omp declare reduction(MIN : Compare : \
     omp_out = (omp_in.val < omp_out.val) ? omp_in : omp_out) \
-    initializer(omp_priv = Compare{0, std::numeric_limits<size_t>::max()})
+    initializer(omp_priv = Compare{0, std::numeric_limits<long long int>::max()})
 
-void __selection_sort(vector<std::pair<size_t,string>>& data, vector<std::pair<size_t,string>>& outp, size_t start, size_t end)
+void __selection_sort(vector<Record>& data, vector<Record>& outp, size_t start, size_t end)
 {
-    for (size_t i = start; i <= end; i++)
-    {
-        outp[i].first = data[i].first;
-        outp[i].second = data[i].second;
-    }
+    std::copy(&data[start], &data[end+1], &outp[start]);
 
     for (size_t idx_curr = start; idx_curr < end; idx_curr++)
     {
@@ -100,16 +244,16 @@ void __selection_sort(vector<std::pair<size_t,string>>& data, vector<std::pair<s
 }
 
 
-void parallel_selection_sort(vector<std::pair<size_t,string>>& data, vector<std::pair<size_t,string>>& outp)
+void parallel_selection_sort(vector<Record>& data, vector<Record>& outp)
 {   
     auto data_size = data.size();
-    vector<std::pair<size_t,string>> partial_sorted(data_size);
+    vector<Record> partial_sorted(data_size, Record{});
 
     int num_threads = 0;
     size_t chunk_sz = 0;
     size_t tail_sz = 0;
 
-    prog::log << "Sorting..." << endl;
+    pr::log << "Sorting..." << endl;
     #pragma omp parallel
     {
         // these values will be identical in each threads (probably)
@@ -124,9 +268,9 @@ void parallel_selection_sort(vector<std::pair<size_t,string>>& data, vector<std:
         // sorting
         __selection_sort(data, partial_sorted, start, end);
     };
-    prog::log << "done." << endl;
+    pr::log << "done." << endl;
 
-    prog::log << "Merging..." << endl;
+    pr::log << "Merging..." << endl;
     vector<size_t> inds{};
     vector<size_t> ends{};
 
@@ -167,80 +311,74 @@ void parallel_selection_sort(vector<std::pair<size_t,string>>& data, vector<std:
         outp.push_back(std::move(partial_sorted[inds[min.idx]]));
         inds[min.idx]++;
     }
-    prog::log << "done." << endl;
+    pr::log << "done." << endl;
 
 }
 
-inline void selection_sort(vector<std::pair<size_t,string>>& data, vector<std::pair<size_t,string>>& outp)
+void selection_sort(vector<Record>& data, vector<Record>& outp)
 {
-    return outp.resize(data.size()), __selection_sort(data, outp, 0, data.size()-1);
+    outp.resize(data.size(), Record{});
+    __selection_sort(data, outp, 0, data.size()-1);
 }
 
 
-void read_data(std::ifstream& in, vector<std::pair<size_t, string>>& data)
+void read_data(std::ifstream& in, vector<Record>& data)
 {
-    prog::log << "Reading..." << endl;
-    for (string line; std::getline(in, line);)
-    {
-        char trash;
-        std::istringstream iss{line};
-
-        size_t key = 0;
-        string value{};
-
-        iss >> trash >> trash >> trash;
-        iss >> key;
-        iss >> trash;
-        std::getline(iss, value, '$');
-
-        data.emplace_back(key, value);
+    pr::log << "Reading..." << endl;
+    for( ;; ) {
+        Record r{};
+        in >> r;
+        if( !r.valid() ) {
+            break;
+        }
+        data.push_back( std::move(r) );
     }
-    prog::log << "done." << endl;
+    in.close();
+    pr::log << "done." << endl;
 }
 
-void write_data(std::ofstream& out, vector<std::pair<size_t, string>>& data)
+void write_data(std::ofstream& out, vector<Record>& data)
 {
-    prog::log << "Writing..." << endl;
-    for (auto& p: data)
-    {
-        out << "%%%" << p.first << ";" << p.second << "$$$" << endl;
-    }
-    prog::log << "done." << endl;
+    pr::log << "Writing..." << endl;
+    std::copy( data.begin(), data.end(), std::ostream_iterator<Record>( out, "\n" ) );
+    pr::log << "done." << endl;
 }
 
 int main(int argc, char* argv[])
 {
-    prog::parse_args(argc, argv);
+    pr::parse_args(argc, argv);
 
     #ifdef PARALLEL
-        prog::log << "--- PARALLEL" << endl;
+        pr::log << "--- PARALLEL" << endl;
     #else
-        prog::log << "--- NON-PARALLEL" << endl;
+        pr::log << "--- NON-PARALLEL" << endl;
     #endif
 
     #ifdef INNER_PARALLEL
-        prog::log << "--- INNER_PARALLEL" << endl;
+        pr::log << "--- INNER_PARALLEL" << endl;
     #endif
 
     try
     {
-        vector<std::pair<size_t, string>> data{};
-        vector<std::pair<size_t, string>> sorted_data{};
+        vector<Record> data{};
+        vector<Record> sorted_data{};
 
-        std::ifstream in{prog::opts.in_file_name};
+        std::ifstream in{pr::opts.in_file_name};
         read_data(in, data);
 
-        prog::log << "Data size: " << data.size() << endl;
+        pr::log << "Data size: " << data.size() << endl;
 
         #ifdef PARALLEL
             parallel_selection_sort(data, sorted_data);
         #else
-            prog::log << "Sorting..." << endl;
+            pr::log << "Sorting..." << endl;
             selection_sort(data, sorted_data);
-            prog::log << "done." << endl;
+            pr::log << "done." << endl;
         #endif
 
-        std::ofstream out{prog::opts.out_file_name};
+        pr::log << "Sorted Data size: " << sorted_data.size() << endl;
+
+        std::ofstream out{pr::opts.out_file_name};
         write_data(out, sorted_data);
     }
     catch (std::exception& e)
