@@ -76,7 +76,7 @@ namespace pr {
 
 class Record
 {
-    const size_t DATA_SIZE = 200;
+    static const size_t DATA_SIZE = 200;
 public:
     Record() noexcept
         : valid_{ false }
@@ -145,7 +145,6 @@ public:
 
     long long int first;
     char* second;
-
 private:
     bool valid_;
 };
@@ -188,16 +187,16 @@ std::istream& operator>> ( std::istream& in, Record& r )
     /* Value, may be empty, may contain '%%' and '$$' */
     int s_count = 0;
     int val_len = 0;
-    for( ;; ) {
-        if( c == '$' ) {
-            ++s_count;
-        } else if( s_count < 3 ) {
-            s_count = 0;
-        } else {
-            in.unget();
-            break;
-        }
+    for(;;) 
+    {
+        if( c == '$' ) { ++s_count; }
+        else if( s_count < 3 ) { s_count = 0; }
+        else { in.unget(); break; }
+
         r.second[val_len++] = static_cast<char>(c);
+
+        assert(val_len < Record::DATA_SIZE && "Data size is over than 200 bytes");
+
         c = in.get();
     }
 
@@ -206,6 +205,28 @@ std::istream& operator>> ( std::istream& in, Record& r )
 
     r.valid_ = true;
     return in;
+}
+
+void read_data(std::ifstream& in, vector<Record>& data)
+{
+    pr::log << "Reading..." << endl;
+    for( ;; ) {
+        Record r{};
+        in >> r;
+        if( !r.valid() )
+        {
+            break;
+        }
+        data.push_back( std::move(r) );
+    }
+    pr::log << "done." << endl;
+}
+
+void write_data(std::ofstream& out, vector<Record>& data)
+{
+    pr::log << "Writing..." << endl;
+    std::copy( data.begin(), data.end(), std::ostream_iterator<Record>( out, "\n" ) );
+    pr::log << "done." << endl;
 }
 
 namespace std
@@ -329,27 +350,7 @@ void parallel_selection_sort(vector<Record>& data, vector<Record>& outp)
 
 
 
-void read_data(std::ifstream& in, vector<Record>& data)
-{
-    pr::log << "Reading..." << endl;
-    for( ;; ) {
-        Record r{};
-        in >> r;
-        if( !r.valid() ) {
-            break;
-        }
-        data.push_back( std::move(r) );
-    }
-    in.close();
-    pr::log << "done." << endl;
-}
 
-void write_data(std::ofstream& out, vector<Record>& data)
-{
-    pr::log << "Writing..." << endl;
-    std::copy( data.begin(), data.end(), std::ostream_iterator<Record>( out, "\n" ) );
-    pr::log << "done." << endl;
-}
 
 int main(int argc, char* argv[])
 {
@@ -378,8 +379,9 @@ int main(int argc, char* argv[])
     }
     catch (std::exception& e)
     {
-        std::cerr << e.what() << std::endl;
+        std::cerr << "--- " << e.what() << std::endl;
     }
+
 
     return 0;
 }

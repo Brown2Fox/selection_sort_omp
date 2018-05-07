@@ -3,11 +3,13 @@ OUT_DIR=.
 
 sorts: np npi 
 
+TIME='--- Elapced time: %e sec ---'
+
 gen:
 	cd $(WORK_DIR) && ./gendata -o $(OUT_DIR)/data.txt -n$(N)
 
 np:
-	cd $(WORK_DIR) && time -f '(%e)' ./ssort_np -i $(OUT_DIR)/data.txt -o $(OUT_DIR)/sorted_data.txt -v -j$(J)
+	cd $(WORK_DIR) && time -f ${TIME} ./ssort_np$(EXE) -i $(OUT_DIR)/data.txt -o $(OUT_DIR)/sorted_data.txt -v -j$(J)
 
 npi:
-	cd $(WORK_DIR) && time -f '(%e)' ./ssort_npi -i $(OUT_DIR)/data.txt -o $(OUT_DIR)/sorted_data.txt -v -j$(J)
+	cd $(WORK_DIR) && time -f ${TIME} ./ssort_npi$(EXE) -i $(OUT_DIR)/data.txt -o $(OUT_DIR)/sorted_data.txt -v -j$(J)
