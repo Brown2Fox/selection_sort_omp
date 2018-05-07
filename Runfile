@@ -1,19 +1,13 @@
 WORK_DIR=.build
 OUT_DIR=.
 
-sorts: np npi p pi
+sorts: np npi 
 
 gen:
-	cd $(WORK_DIR) && ./gendata -o $(OUT_DIR)/data.txt -n 100000
+	cd $(WORK_DIR) && ./gendata -o $(OUT_DIR)/data.txt -n$(N)
 
 np:
-	cd $(WORK_DIR) && time -f '(%e)' ./ssort_np -i $(OUT_DIR)/data.txt -o $(OUT_DIR)/sorted_data.txt -v
+	cd $(WORK_DIR) && time -f '(%e)' ./ssort_np -i $(OUT_DIR)/data.txt -o $(OUT_DIR)/sorted_data.txt -v -j$(J)
 
 npi:
-	cd $(WORK_DIR) && time -f '(%e)' ./ssort_npi -i $(OUT_DIR)/data.txt -o $(OUT_DIR)/sorted_data.txt -v
-
-p:
-	cd $(WORK_DIR) && time -f '(%e)' ./ssort_p -i $(OUT_DIR)/data.txt -o $(OUT_DIR)/sorted_data.txt -v
-
-pi:
-	cd $(WORK_DIR) && time -f '(%e)' ./ssort_pi -i $(OUT_DIR)/data.txt -o $(OUT_DIR)/sorted_data.txt -v
+	cd $(WORK_DIR) && time -f '(%e)' ./ssort_npi -i $(OUT_DIR)/data.txt -o $(OUT_DIR)/sorted_data.txt -v -j$(J)

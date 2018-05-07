@@ -14,12 +14,8 @@ FILE(GLOB FILES
 set(SSORTOMP_SRC select_sort_omp.cpp)
 set(GEN_DATA_SRC generate_data.cpp)
 
-add_executable(ssort_np ${SSORTOMP_SRC})
-add_executable(ssort_npi ${SSORTOMP_SRC})
-add_executable(ssort_p ${SSORTOMP_SRC})
-add_executable(ssort_pi ${SSORTOMP_SRC})
+add_executable(ssort ${SSORTOMP_SRC})
+add_executable(ssort_i ${SSORTOMP_SRC})
 add_executable(gendata ${GEN_DATA_SRC})
 
-set_target_properties(ssort_npi PROPERTIES COMPILE_FLAGS "-DINNER_PARALLEL")
-set_target_properties(ssort_p PROPERTIES COMPILE_FLAGS "-DPARALLEL")
-set_target_properties(ssort_pi PROPERTIES COMPILE_FLAGS "-DPARALLEL -DINNER_PARALLEL")
+set_target_properties(ssort_i PROPERTIES COMPILE_FLAGS "-DINNER_PARALLEL")
